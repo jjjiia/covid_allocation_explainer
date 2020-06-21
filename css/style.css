@@ -1,0 +1,46 @@
+body{
+	font-family:helvetica;
+	color:#000000;
+    font-size:11px;
+    padding:10px;
+}
+a{
+	color:#aaaaaa;
+}
+
+/* for charts and maps */
+ #map{
+     padding:10px;
+	 position:absolute;
+	 left:0px;
+     top:0px;
+     height:100%;
+     width:100%;
+     z-index:-1;
+ }
+
+ #byState{
+	 position:absolute;
+	 left:0px;
+     top:0px;
+ }
+ #layerControl{
+	 position:absolute;
+	 left:0px;
+     top:0px;
+     z-index:999;
+     width:300px;
+     height:180px;
+     background-color:black;
+     margin:10px;
+ }
+ #key{
+	 position:absolute;
+	 left:0px;
+     top:200px;
+     z-index:999;
+     width:300px;
+     height:100px;
+     margin:10px;
+     background-color:black;
+ }

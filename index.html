@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+	  <meta charset="UTF-8">
+    <title>Contact Tracer Allocation Explainer</title>
+
+    <script type="text/javascript" src="js/d3.js"></script>
+    <script src="https://unpkg.com/d3-simple-slider"></script>
+    <script type="text/javascript" src="js/crossfilter.js"></script>
+    <script type="text/javascript" src="js/dc.js"></script>
+    <script type="text/javascript" src="js/queue.v1.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css"
+      integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO"
+      crossorigin="anonymous"
+    />
+    <meta charset="UTF-8">
+<style>
+     body{
+       font-family:helvetica;
+       font-size:12px;
+     }
+     #main{
+   
+     }
+     #header{
+       height:80px;
+       padding:10px;
+       margin:10px;
+       font-size:24px;
+       font-weight:bold;
+     }
+     .block{
+       border:1px solid black;
+       padding:10px 10px 10px 20px;
+     }
+     .em0{
+       font-weight:bold;
+       font-size:20px;
+       color:#3d8890;
+     }
+     .em1{
+       font-weight:bold;
+       color:#5dac31;
+     }
+     .em2{
+       font-weight:bold;
+       color:#5dac31;
+     }
+     #mapRollover{
+     }
+    </style>
+
+</head>
+
+<body>
+
+<div class="row" id="header">Explainer: How(+how many) and where to place contact tracers. <br>v0</div>
+  
+<div class="row">
+     <div class="col-sm-4" id = left>
+         <div class="row">
+             <div class="block col-sm-5" id="supply"><span class="em0">1. Supply</span>(capacity?) is determined by budget and policy.
+                 <p id="value-vertical"></p>
+                 <div id="slider-vertical"></div>
+             </div>
+             <div class="block col-sm-7" id="demand">
+                 <span class="em0">2. Demand</span> is determined by case load and population.(GWU)
+                 <p id="demandSubtitle"></p>
+             </div>
+         </div>
+         <div class="row">
+           <div class="col-sm-12 block" id="weight"><span class="em0">3. Weight</span> is determined by which 
+             factors are taken into consideration so that places fitting particular criteria are prioritized.
+             (these are placeholder factors)
+             <br>
+             <br>
+
+           <div class="col-sm-12"><p id="value-RPL_THEMES"><span class="em1">THEMES</span> has the 
+             weight of <span class="em2">0</span></p></div>
+           <div class="col-sm-4"><div id="slider-RPL_THEMES"></div></div>
+    
+           <div class="col-sm-12"><p id="value-RPL_THEME1"><span class="em1">THEME 1</span> has 
+             the weight of <span class="em2">0</span></p></div>
+           <div class="col-sm-6"><div id="slider-RPL_THEME1"></div></div>
+         </div>
+     </div>
+    </div>
+    
+     <div class="col-sm-7" id = right>
+         <div class="block" id="map"><span class="em0">4. Allocation</span> of # of contract tracers 
+           for each tract is based on its <span class="em0">population</span> 
+           and the total county <span class="em0">demand</span>.
+           <br>
+           The <span class="em0">priority</span>(order) with which the allocated positions(demand) are filled is based 
+           on the <span class="em0">weight </span> factors. 
+           <br>
+           The <span class="em0">extent</span> to which the allocated positions(demand)  can be filled is based on the 
+           <span class="em0">supply</span> of contact tracers .<br>
+         </div>
+         <div id="mapRollover">rollover county to see more info</div>
+         
+     </div>
+</div> 
+
+    
+  
+ 
+  
+
+<script>
+  
+  //0.isolate data for 1 county
+  //1. gw allocations determine how many are needed
+  //  load from data
+  var bronx = {FIPS:"36005",totalDemand:2652,hotspot:0.184439227,name:"Bronx New York",priority:	183.0928205}
+  var autauga = {FIPS:"01001",totalDemand:23,hotspot:0.041666667,name:"Autauga County Alabama",priority:18.14166667,population:55200}
+  
+ var supplyColor = "#a5e089"
+  var demandColor = "#5dac31"
+  var mapColors = ["#44330e","#b59a58"]
+  
+  var priority = null
+  var myProjection = null
+  var priorityList = []
+    var centroidDemand = []
+  var pub = {
+    supply:null,
+    supplyPer:null
+  }
+   Promise.all([d3.csv("Alabama_TRACT.csv"),d3.csv("Alabama_COUNTY.csv"),d3.json("Alabama.geojson"),d3.json("Alabama_centroids.geojson")])
+  .then(function(data){
+    ready(data[0],data[1],data[2],data[3])
+  })
+  
+  function ready(tract,county,tractGeo,tractCentroids){
+
+    var tractsSVI = getCounty(autauga.FIPS,tract,"STCNTY")
+    var countySVI = getCounty(autauga.FIPS,county,"FIPS")
+    var population = countySVI[0]["E_TOTPOP"]
+        
+    supplySlider(autauga,population)
+    drawDemand(autauga)
+    fillInDemand(autauga,17)
+    weightSliders("RPL_THEMES",0,tractsSVI,autauga.totalDemand,tractCentroids,population,autauga)
+    weightSliders("RPL_THEME1",0,tractsSVI,autauga.totalDemand,tractCentroids,population,autauga)
+    
+    var countyTractsGeo = getCountyGeo(autauga.FIPS,tractGeo)
+    drawMap(countyTractsGeo,autauga.name)
+   // tractPriority(tractsSVI,tractCentroids)
+  }
+  
+function getCounty(fips,data,matchColumn){
+    var isolatedData = []
+    for(var i in data){
+      var gid = data[i][matchColumn]
+      if(gid == fips){
+        isolatedData.push(data[i])
+      }
+    }
+    return isolatedData    
+}
+ 
+  //2. slider for how many are supplied
+function supplySlider(county,population){
+    var countyName = county.name
+    var countyDemand = county.totalDemand
+    var demandPer100k = Math.floor(countyDemand*100000/population)
+  
+    var initialValue = 0
+    var initialTotal = Math.ceil(population/100000*initialValue)
+    d3.select('p#value-vertical').html("If <span class=\"em2\">"
+    +initialValue+"</span> contact tracers are assigned per <span class=\"em1\">100,000</span> residents, in "+countyName
+    +", <span class=\"em1\">"
+    +population+"</span> residents mean  <span class=\"em2\">"+ initialTotal+"</span> contact tracers total are available.");
+    
+ 
+   var sliderVertical = d3
+      .sliderLeft()
+      .min(1)
+      .max(demandPer100k)
+      .height(200)
+      //.tickFormat(d3.format('.2%'))
+      .ticks(5)
+      .default(initialValue)
+      .on('onchange', val => {
+        var totalCT = Math.ceil(population/100000*val)
+        d3.select('p#value-vertical').html("If <span class=\"em2\">"
+        +Math.round(val)+"</span> contact tracers are assigned per <span class=\"em1\">100,000</span> residents, in "+countyName
+        +", <span class=\"em1\">"
+        +population+"</span> residents means <span class=\"em2\">"+ totalCT+"</span> contact tracers total are available.");
+      
+        pub.supply = val
+        fillInDemand(county,totalCT)
+      });
+
+    var gVertical = d3
+      .select('div#slider-vertical')
+      .append('svg')
+      .attr('width', 100)
+      .attr('height', 250)
+      .append('g')
+      .attr('transform', 'translate(60,30)');
+  
+      gVertical.call(sliderVertical);
+  
+}
+  
+  //3. link slider to demand
+function  fillInDemand(county){
+  var demand = county.totalDemand
+  
+  var supply = Math.ceil(pub.supply*county.population/100000)
+    var circles = d3.selectAll(".demand")
+    .each(function(d,i){      
+      if(i<supply){
+        d3.select(".ct_"+i).transition().duration(200).attr("fill",supplyColor)
+      }else{
+        d3.select(".ct_"+i).transition().duration(200).attr("fill","none")
+      }
+    })
+    
+    var mapCircles = d3.selectAll(".mapDemand")
+    .each(function(d,i){
+      if(i<supply){
+        d3.select(".mapDemand_"+i).transition().duration(200).attr("fill",supplyColor)
+      }else{
+        d3.select(".mapDemand_"+i).transition().duration(200).attr("fill","none")
+      }
+    })
+    
+    d3.select("#demandSubtitle").html("For "+county.name+", <span class=\"em1\">"+demand
+    +"</span> contact tracers are needed.<br><span class=\"em2\">"
+    +supply+"</span> ("+Math.round(supply/demand*100)+"%)"+" are filled."
+    )
+    
+}
+
+function drawDemand(county){
+    var demand = parseInt(county.totalDemand)
+    var w = 400
+    var h = 300
+    var columns = 5
+    var spacing = 30
+    var radius = 8
+    var svg = d3.select("#demand").append("svg").attr("width",w).attr("height",h)
+    var demandList = new Array(demand);
+    
+    
+    svg.selectAll("circle")
+    .data(demandList)
+    .enter()
+    .append("circle")
+    .attr("r",radius)
+    .attr("cx",function(d,i){
+      return i%columns*spacing 
+    })
+    .attr("cy",function(d,i){
+      return Math.floor(i/columns)*spacing 
+    })
+    .attr("transform","translate(50,50)")
+    .attr("class",function(d,i){return "demand ct_"+i})
+    .attr("fill","none")
+    .attr("stroke",demandColor)
+    .attr("stroke-width","2px")
+    
+}
+  
+  //4. map of county and tracts within
+function getCountyGeo(FIPS,tractGeo){
+  var newFeatures=[]
+  for(var i in tractGeo.features){
+    var geoid = tractGeo.features[i].properties.FIPS.slice(0,5)
+    if(geoid == FIPS){
+      newFeatures.push(tractGeo.features[i])
+    }
+  }
+  tractGeo["features"]=newFeatures
+  return tractGeo
+}
+
+function drawMap(geoData,countyName){
+  var w = 700
+  var h = 600
+  myProjection = d3.geoAlbers()
+  var myPath = d3.geoPath().projection(myProjection)
+  
+  var colorScale = d3.scaleLinear().domain([1,0]).range(mapColors)
+  var colorKeyArray = new Array(10)
+  
+  
+	myProjection.fitExtent([[40, 70], [w,h]], geoData);
+  
+  var svg = d3.select("#map").append("svg")
+			.attr("width",w)
+			.attr("height",h)
+  
+  svg.append("text").text(countyName).attr("x",40).attr("y",60)
+  
+  svg.selectAll("rect")
+  .data(colorKeyArray)
+  .enter()
+  .append("rect")
+  .attr("x",0)
+  .attr("y",function(d,i){
+    return 110-i*10
+  })
+  .attr("width",40)
+  .attr("height",10-1)
+  .attr("transform","translate(0,400)")
+  .attr("fill",function(d,i){
+    return colorScale(i/10)
+  })
+  .attr("opacity",.6)
+  svg.append("text").text("high priority").attr("x",0).attr("y",0)
+  .attr("transform","translate(50,430)")
+  
+  svg.append("text").text("low priority").attr("x",0).attr("y",100)
+  .attr("transform","translate(50,420)")
+  
+	svg.selectAll("path")
+		.data(geoData.features)
+		.enter()
+		.append("path")
+    .attr("class","geoPaths")
+  .attr("id",function(d){return "_"+d.properties.FIPS})
+		.attr("stroke", "#888")
+  .attr("factor",function(d,i){
+      return d.properties["RPL_THEME1"]
+		})
+    .attr("stroke","#fff")
+    .attr("stroke-width","3px")
+		.attr("fill", function(d,i){
+      return "#aaa"
+      //return colorScale(d.properties["RPL_THEME1"])
+		})
+		.attr("d", myPath)
+    .attr("opacity",0.6)
+    .on("mouseover",function(d){
+      d3.select(this).attr("opacity",1)
+      var displayString = d.properties["LOCATION"]+"<br>Population: "
+      +d.properties["E_TOTPOP"]+"<br>SVI:"+d.properties["SPL_THEMES"]
+      d3.select("#mapRollover").html(displayString)
+    })
+    .on("mouseout",function(d){
+      d3.select(this).attr("opacity",.6)
+      d3.select("#mapRollover").html("")
+    })
+}
+
+function colorMap(newPriority){
+  var newOrder = []  
+  var colorScale = d3.scaleLinear().domain([0,newPriority.length]).range(mapColors)
+  
+  for(var i in newPriority){
+    var tractID = newPriority[i]["FIPS"]
+    var priorityOrder = newPriority[i]["pOrder"]
+    d3.select("#_"+tractID).transition().duration(500).attr("fill",function(){
+      return colorScale(priorityOrder)
+    })
+  }
+  
+  
+}
+  //5. divide county demand by population proportion of each tract - place dots onto shape of tract
+
+function formatCentroids(centroids){
+  var formatted = {}
+  for(var i in centroids.features){
+    var tract = centroids.features[i]
+    var fips = tract.properties.FIPS
+    var coords = tract.geometry.coordinates
+    formatted[fips]=coords
+  }
+  return formatted
+}
+function tractPriority(tracts,centroids){
+   var centroidsDict = formatCentroids(centroids)
+  var svg = d3.select("#map svg")
+  for(var i in tracts){
+      var pop = tracts[i]["E_TOTPOP"]
+      var fips = tracts[i]["FIPS"]
+      var centroid = centroidsDict[fips]
+      centroidDemand.push({id:fips,demand:demand,coords:centroid,priority:0})
+     // priorityList = {id:fips,priority:0}
+    }
+    
+    for(var j in centroidDemand){
+      var latlng = centroidDemand[j].coords
+      var fips = centroidDemand[j].id
+      svg.append("text")
+      .text(centroidDemand[j].priority)
+      .attr("class","priorityLabel_"+fips)
+      .attr("x",function(){
+        var cx = myProjection(latlng)[0]
+        return cx-2
+      })
+      .attr("y",function(d){
+        var cy = myProjection(latlng)[1]
+        return cy+4
+      })
+    }
+}
+
+function updatePriority(tracts){
+  var slider1Val = d3.select("#value-RPL_THEMES").attr("value")
+  var slider2Val = d3.select("#value-RPL_THEME1").attr("value")
+  //for each gid, val*sliderval+val2*slider2val
+  for(var i in tracts){
+    var tractData = tracts[i]
+    var tractID = tractData["FIPS"]
+    var priority = slider1Val*tractData["RPL_THEMES"]+slider2Val*tractData["RPL_THEME1"]
+    tracts[i]["priority"]=priority
+  }
+  //sort
+  tracts.sort(function(a,b){return b.priority-a.priority})
+  for(var k in tracts){
+    tracts[k]["pOrder"]=k
+    var tractID = tracts[k]["FIPS"]
+   // d3.selectAll(".priorityLabel_"+tractID).text(k)
+  }
+  
+  
+  
+  return tracts
+}
+
+function placeDemand(tracts,centroids,totalPop,totalDemand){
+ // console.log(tracts)
+  var svg = d3.select("#map svg")
+  var centroidsDict = formatCentroids(centroids)
+  //get proportion of each tract
+  //get number of tracers
+  var centroidDemand = []
+  for(var i in tracts){
+    var pop = tracts[i]["E_TOTPOP"]
+    var fips = tracts[i]["FIPS"]
+    var demand = Math.round(pop/totalPop*totalDemand)
+    var centroid = centroidsDict[fips]
+    centroidDemand.push({demand:demand,coords:centroid})
+  }
+  //put circle on tract starting on centroid
+  d3.selectAll(".mapDemand").remove()
+  d3.selectAll(".mapDemandLabel").remove()
+  var mapDemandID = 0
+  for(var j in centroidDemand){
+    var tractDemand = centroidDemand[j].demand
+    var latlng = centroidDemand[j].coords
+    
+    for(var k=0;k<tractDemand;k++){
+      svg.append("circle")
+      .attr("class","mapDemand mapDemand_"+mapDemandID+" "+i+"_"+k)
+      .attr("r",8)
+      .attr("cx",function(){
+        var cx = myProjection(latlng)[0]
+        var cy = myProjection(latlng)[1]
+        return cx+(k)*14
+      })
+      .attr("cy",function(d){
+        var cx = myProjection(latlng)[0]
+        var cy = myProjection(latlng)[1]
+        return cy+14
+      })
+      .attr("stroke",demandColor)
+      .attr("fill","none")
+      
+      svg.append("text")
+      .text(mapDemandID)
+      .attr("class","mapDemandLabel "+"_"+mapDemandID)
+      .attr("x",function(){
+        var cx = myProjection(latlng)[0]
+        var cy = myProjection(latlng)[1]
+        return cx+(k)*14
+      })
+      .attr("y",function(d){
+        var cx = myProjection(latlng)[0]
+        var cy = myProjection(latlng)[1]
+        return cy+18
+      })
+      .attr("font-size","9px")
+      .attr("text-anchor","middle")
+      mapDemandID+=1
+    }
+  }
+  
+  
+  
+}
+  //6. make priority for each tract - svi percentile, hotspot-randomly generated for now
+  //7. build 2 sliders to multiply each by, show product as final priority
+function weightSliders(divName,initialValue,tracts,totalDemand,tractCentroids,population,county){
+  var sliderSimple = d3
+    .sliderBottom()
+    .min(0)
+    .max(1)
+    .width(300)
+   // .tickFormat(d3.format('.2%'))
+    .ticks(5)
+    .default(initialValue)
+    .on('onchange', val => {
+      d3.select('p#value-'+divName)
+      .attr("value",val)
+      .html("<span class=\"em1\">"+divName+"</span> has weight of <span class=\"em2\">"+Math.round(val*100)/100)+"</span>";
+      
+      var newPriority = updatePriority(tracts)
+      colorMap(newPriority)
+      
+      placeDemand(newPriority,tractCentroids,population,autauga.totalDemand)
+      
+      fillInDemand(county, supply)
+    });
+
+  var gSimple = d3
+    .select('div#slider-'+divName)
+    .append('svg')
+    .attr('width', 500)
+    .attr('height', 100)
+    .append('g')
+    .attr('transform', 'translate(30,30)');
+
+  gSimple.call(sliderSimple);
+}
+  //8. color tract by priority
+  //9. fill in supply in order of priority
+
+</script>
+<!--
+    <script type="text/javascript" src="explainer.js"></script>
+-->
+
+
+</body>
+</html>
