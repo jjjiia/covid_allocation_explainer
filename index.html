@@ -266,6 +266,23 @@ function drawDemand(county){
     .attr("stroke",demandColor)
     .attr("stroke-width","2px")
     
+    
+    svg.selectAll("text")
+    .data(demandList)
+    .enter()
+    .append("text")
+    .text(function(d,i){
+      return i+1
+    })
+    .attr("x",function(d,i){
+      return i%columns*spacing
+    })
+    .attr("y",function(d,i){
+      return Math.floor(i/columns)*spacing +radius/2
+    })
+    .attr("transform","translate(50,50)")
+    .attr("text-anchor","middle")
+    .attr("font-size","10px")
 }
   
   //4. map of county and tracts within
