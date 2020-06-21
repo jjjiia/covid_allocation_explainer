@@ -21,15 +21,16 @@
      body{
        font-family:helvetica;
        font-size:12px;
+       overflow:hidden;
      }
      #main{
    
      }
      #header{
-       height:80px;
+       height:40px;
        padding:10px;
        margin:10px;
-       font-size:24px;
+       font-size:14px;
        font-weight:bold;
        border-bottom:1px solid black;
      }
@@ -37,7 +38,7 @@
        border-left:1px solid black;
      }
      #supply{
-       border-right:1px solid black;
+       border-left:1px solid black;
      }
      #weight{
        border-top:1px solid black;
@@ -57,9 +58,14 @@
      }
      .em2{
        font-weight:bold;
-       color:#5dac31;
+       color:#cb5a4c;
+       text-decoration:underline;
      }
      #mapRollover{
+       position:absolute;
+       margin-left:20px;
+       margin-top:200px;
+       z-index:1;
      }
     </style>
 
@@ -67,19 +73,20 @@
 
 <body>
 
-<div class="row" id="header">Explainer: How(+how many) and where to place contact tracers. <br>v0</div>
+<div class="row" id="header">Explainer: How(+how many) and where to place contact tracers v1</div>
   
 <div class="row">
      <div class="col-sm-4" id = left>
          <div class="row">
-             <div class="block col-sm-5" id="supply"><span class="em0">1. Supply</span>(capacity?) is determined by budget and policy.
+             <div class="block col-sm-7" id="demand">
+                 <span class="em0">1. Demand</span> is determined by case load and population.(GWU)
+                 <p id="demandSubtitle"></p>
+             </div>
+             <div class="block col-sm-5" id="supply"><span class="em0">2. Supply</span>(capacity?) is determined by budget and policy. (30? per 100,000 is an official recomendation)
                  <p id="value-vertical"></p>
                  <div id="slider-vertical"></div>
              </div>
-             <div class="block col-sm-7" id="demand">
-                 <span class="em0">2. Demand</span> is determined by case load and population.(GWU)
-                 <p id="demandSubtitle"></p>
-             </div>
+             
          </div>
          <div class="row">
            <div class="col-sm-12 block" id="weight"><span class="em0">3. Weight</span> is determined by which 
@@ -99,19 +106,22 @@
      </div>
     </div>
     
-     <div class="col-sm-7" id = right>
-         <div class="block" id="map"><span class="em0">4. Allocation</span> of # of contract tracers 
+     <div class="col-sm-5" id = right>
+       <div id="mapRollover">rollover county to see more info</div>
+       
+         <div class="block" id="map"><span class="em0">4. Allocation</span> of contract tracers 
            for each tract is based on its <span class="em0">population</span> 
-           and the total county <span class="em0">demand</span>.
+           and the total county <span class="em0">demand</span>(1).
            <br>
-           The <span class="em0">priority</span>(order) with which the allocated positions(demand) are filled is based 
-           on the <span class="em0">weight </span> factors. 
-           <br>
-           The <span class="em0">extent</span> to which the allocated positions(demand)  can be filled is based on the 
-           <span class="em0">supply</span> of contact tracers .<br>
+          <span class="em0">5. Priority</span>(order) with which the allocated positions(demand) are filled is based 
+           on the <span class="em0">weight</span>(3) factors. 
          </div>
-         <div id="mapRollover">rollover county to see more info</div>
          
+     </div>
+     <div class="col-sm-2" id = right>
+       <span class="em0">6.</span> The extent of <span class="em0">coverage</span> for each tract is based on the county's
+       <span class="em0">supply</span>, and the tract's <span class="em0">allocation and priority</span>(2,4 and 5).<br>
+       <div id="tractList"></div>
      </div>
 </div> 
 
@@ -128,7 +138,7 @@
   var bronx = {FIPS:"36005",totalDemand:2652,hotspot:0.184439227,name:"Bronx New York",priority:	183.0928205}
   var autauga = {FIPS:"01001",totalDemand:23,hotspot:0.041666667,name:"Autauga County Alabama",priority:18.14166667,population:55200}
   
- var supplyColor = "#b4943e"
+ var supplyColor = "#cb5a4c"
   var demandColor = "#cb5a4c"
   var mapColors = ["#44330e","#b59a58"]
   
@@ -159,7 +169,7 @@
     
     var countyTractsGeo = getCountyGeo(autauga.FIPS,tractGeo)
     drawMap(countyTractsGeo,autauga.name)
-   // tractPriority(tractsSVI,tractCentroids)
+    tractPriority(tractsSVI,tractCentroids)
   }
   
 function getCounty(fips,data,matchColumn){
@@ -309,7 +319,7 @@ function getCountyGeo(FIPS,tractGeo){
 }
 
 function drawMap(geoData,countyName){
-  var w = 700
+  var w = 600
   var h = 600
   myProjection = d3.geoAlbers()
   var myPath = d3.geoPath().projection(myProjection)
@@ -318,13 +328,13 @@ function drawMap(geoData,countyName){
   var colorKeyArray = new Array(10)
   
   
-	myProjection.fitExtent([[40, 70], [w,h]], geoData);
+	myProjection.fitExtent([[40, 60], [w,h]], geoData);
   
   var svg = d3.select("#map").append("svg")
 			.attr("width",w)
 			.attr("height",h)
   
-  svg.append("text").text(countyName).attr("x",40).attr("y",60)
+ // svg.append("text").text(countyName).attr("x",0).attr("y",60)
   
   svg.selectAll("rect")
   .data(colorKeyArray)
@@ -358,7 +368,7 @@ function drawMap(geoData,countyName){
       return d.properties["RPL_THEME1"]
 		})
     .attr("stroke","#fff")
-    .attr("stroke-width","3px")
+    .attr("stroke-width","1px")
 		.attr("fill", function(d,i){
       return "#aaa"
       //return colorScale(d.properties["RPL_THEME1"])
@@ -368,7 +378,7 @@ function drawMap(geoData,countyName){
     .on("mouseover",function(d){
       d3.select(this).attr("opacity",1)
       var displayString = d.properties["LOCATION"]+"<br>Population: "
-      +d.properties["E_TOTPOP"]+"<br>SVI:"+d.properties["SPL_THEMES"]
+      +d.properties["E_TOTPOP"]
       d3.select("#mapRollover").html(displayString)
     })
     .on("mouseout",function(d){
@@ -410,7 +420,7 @@ function tractPriority(tracts,centroids){
       var pop = tracts[i]["E_TOTPOP"]
       var fips = tracts[i]["FIPS"]
       var centroid = centroidsDict[fips]
-      centroidDemand.push({id:fips,demand:demand,coords:centroid,priority:0})
+      centroidDemand.push({id:fips,demand:demand,coords:centroid,priority:""})
      // priorityList = {id:fips,priority:0}
     }
     
@@ -419,14 +429,17 @@ function tractPriority(tracts,centroids){
       var fips = centroidDemand[j].id
       svg.append("text")
       .text(centroidDemand[j].priority)
+      .attr("opacity",.8)
+      .attr("fill","#fff")
+      .attr("text-anchor","middle")
       .attr("class","priorityLabel_"+fips)
       .attr("x",function(){
-        var cx = myProjection(latlng)[0]
-        return cx-2
+        var x = myProjection(latlng)[0]
+        return x-2
       })
       .attr("y",function(d){
-        var cy = myProjection(latlng)[1]
-        return cy+4
+        var y = myProjection(latlng)[1]
+        return y+4
       })
     }
 }
@@ -446,7 +459,7 @@ function updatePriority(tracts){
   for(var k in tracts){
     tracts[k]["pOrder"]=k
     var tractID = tracts[k]["FIPS"]
-   // d3.selectAll(".priorityLabel_"+tractID).text(k)
+    d3.selectAll(".priorityLabel_"+tractID).text(parseInt(k)+1)
   }
   
   
